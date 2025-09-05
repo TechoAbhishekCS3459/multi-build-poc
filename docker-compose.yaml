@@ -1,0 +1,29 @@
+services:
+  app:
+    image: abhishek3459/myapp-multidev:latest
+    ports:
+      - "3000:3000"
+    environment:
+      # Server-only (taken from host environment or .env)
+      - API_URL
+      - API_URL3
+      - NEXTAUTH_SECRET
+      - NEXTAUTH_URL
+      - SECRET_KEY
+      - MONGODB_URI
+      - NODEMAILER_SERVICE
+      - NODEMAILER_EMAIL
+      - NODEMAILER_PASS
+      - GITHUB_ID
+      - GITHUB_SECRET
+      - AZURE_CLIENT_ID
+      - AZURE_CLIENT_SECRET
+      - OKTA_CLIENTID
+      - OKTA_CLIENT_SECRET
+      - ENCRYPTION_KEY
+
+      # Public (runtime replacement in entrypoint.sh)
+      - NEXT_PUBLIC_REDIRECT_URL=https://prod.mayfly.cumulus.com
+      - NEXT_PUBLIC_CW_LOGIN_URL=https://prod.cw.techo.camp:3001/login
+      - NEXT_PUBLIC_CW_APP_URL=https://prod.cw.techo.camp:3001/chat
+      - NEXT_PUBLIC_CW_DOMAIN=https://prod.cw.techo.camp:3001/
