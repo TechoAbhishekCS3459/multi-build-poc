@@ -1,3 +1,4 @@
+
 # 🐳 Docker Multi-Environment Deployment Guide
 
 A comprehensive guide for optimizing Docker builds to deploy the same image across multiple environments without rebuilding.
@@ -11,6 +12,8 @@ A comprehensive guide for optimizing Docker builds to deploy the same image acro
 5. [Best Practices](#best-practices)
 6. [Troubleshooting](#troubleshooting)
 7. [Examples](#examples)
+8. [Real-World Implementation](#real-world-implementation)
+9. [Entrypoint Scripts](#entrypoint-scripts)
 
 ## 🎯 Overview
 
@@ -109,15 +112,15 @@ RUN npm run build
 
 #### After (Optimized for multi-environment):
 ```dockerfile
-# ✅ G
+# ✅ GOOD: Only build-time variables as ARGs
 ARG NEXT_PUBLIC_API_URL
 ARG NEXTAUTH_URL
 ARG NEXT_PUBLIC_DOMAIN
 
 # Set only build-time environment variables
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_UR
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXTAUTH_URL=$NEXTAUTH_URL \
-    NEXTAUTH_DOMAIN=$NEXT_PUBLIC_DOMAIN
+    NEXT_PUBLIC_DOMAIN=$NEXT_PUBLIC_DOMAIN
 
 RUN npm run build
 
@@ -376,6 +379,258 @@ volumes:
   mongo_data:
 ```
 
+## 🚀 Real-World Implementation
+
+### multi-build-poc Repository
+
+The [**multi-build-poc repository**](https://github.com/TechoAbhishekCS3459/multi-build-poc) provides a complete working example of Docker multi-environment deployment with advanced features:
+
+#### Key Features
+- **Complete Next.js Application**: Full-stack application demonstrating multi-environment deployment
+- **Entrypoint Scripts**: Dynamic runtime configuration using `entrypoint.sh`
+- **CI/CD Integration**: GitHub Actions workflows for automated deployment
+- **Environment Detection**: Automatic environment-specific configuration
+- **Production Ready**: Includes proper error handling, logging, and validation
+
+#### Repository Structure
+```
+multi-build-poc/
+├── .github/workflows/     # CI/CD pipeline examples
+├── app/                   # Next.js application
+├── public/                # Static assets
+├── .dockerignore          # Docker ignore file
+├── .gitignore             # Git ignore file
+├── Dockerfile             # Optimized Dockerfile
+├── README.md              # Project documentation
+├── docker-compose.yaml    # Docker Compose configuration
+├── entrypoint.sh          # Runtime configuration script
+├── next.config.ts         # Next.js configuration
+├── package.json           # Dependencies
+└── tsconfig.json          # TypeScript configuration
+```
+
+#### Getting Started with multi-build-poc
+
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/TechoAbhishekCS3459/multi-build-poc.git
+   cd multi-build-poc
+   ```
+
+2. **Build the Image**:
+   ```bash
+   docker build -t multi-build-poc:latest .
+   ```
+
+3. **Deploy to Different Environments**:
+   ```bash
+   # Development environment
+   docker run -d \
+     -e ENVIRONMENT=development \
+     -e DATABASE_URL="mongodb://dev-db:27017/app" \
+     -e API_SECRET="dev-secret" \
+     -p 3000:3000 \
+     multi-build-poc:latest
+
+   # Production environment
+   docker run -d \
+     -e ENVIRONMENT=production \
+     -e DATABASE_URL="mongodb://prod-cluster:27017/app" \
+     -e API_SECRET="prod-secret" \
+     -p 3000:3000 \
+     multi-build-poc:latest
+   ```
+
+#### Learning from the Implementation
+
+- **Study the Dockerfile**: See how build-time variables are minimized
+- **Examine the entrypoint.sh**: Understand dynamic runtime configuration
+- **Review CI/CD workflows**: Learn automated deployment patterns
+- **Check environment handling**: See how different environments are managed
+
+## 🚀 Entrypoint Scripts
+
+### What are Entrypoint Scripts?
+
+Entrypoint scripts provide the ultimate flexibility for Docker multi-environment deployments by allowing dynamic configuration at container startup. They complement the build-time vs runtime variable optimization by adding intelligent runtime configuration management.
+
+### Benefits of Entrypoint Scripts
+
+1. **Dynamic Environment Detection**: Automatically configure based on environment
+2. **Runtime Validation**: Validate configuration before application startup
+3. **Flexible Configuration**: Support complex configuration scenarios
+4. **Error Handling**: Graceful handling of configuration errors
+5. **Logging**: Comprehensive logging for debugging and monitoring
+
+### Entrypoint Script Example
+
+```bash
+#!/bin/bash
+set -e
+
+# Set default environment
+ENVIRONMENT=${ENVIRONMENT:-development}
+
+# Log startup information
+echo "=========================================="
+echo "Starting application in $ENVIRONMENT environment"
+echo "=========================================="
+
+# Environment-specific configuration
+configure_environment() {
+  case $ENVIRONMENT in
+    development)
+      export LOG_LEVEL=debug
+      export CACHE_TTL=300
+      export DEBUG=true
+      echo "✓ Development configuration applied"
+      ;;
+    staging)
+      export LOG_LEVEL=info
+      export CACHE_TTL=600
+      export DEBUG=false
+      echo "✓ Staging configuration applied"
+      ;;
+    production)
+      export LOG_LEVEL=error
+      export CACHE_TTL=3600
+      export DEBUG=false
+      echo "✓ Production configuration applied"
+      ;;
+    *)
+      echo "❌ Unknown environment: $ENVIRONMENT"
+      echo "Supported environments: development, staging, production"
+      exit 1
+      ;;
+  esac
+}
+
+# Validate required environment variables
+validate_environment() {
+  local required_vars=("DATABASE_URL" "API_SECRET")
+  local missing_vars=()
+
+  for var in "${required_vars[@]}"; do
+    if [ -z "${!var}" ]; then
+      missing_vars+=("$var")
+    fi
+  done
+
+  if [ ${#missing_vars[@]} -ne 0 ]; then
+    echo "❌ Missing required environment variables:"
+    printf '  - %s\n' "${missing_vars[@]}"
+    exit 1
+  fi
+
+  echo "✓ All required environment variables are set"
+}
+
+# Main execution
+main() {
+  configure_environment
+  validate_environment
+  
+  echo "=========================================="
+  echo "Configuration complete. Starting application..."
+  echo "=========================================="
+  
+  # Execute the main command
+  exec "$@"
+}
+
+# Run main function
+main "$@"
+```
+
+### Dockerfile Integration
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install bash for entrypoint script
+RUN apk add --no-cache bash
+
+# Copy package files
+COPY package*.json ./
+RUN npm install
+
+# Copy application code
+COPY . .
+
+# Copy and setup entrypoint script
+COPY entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Build the application
+RUN npm run build
+
+# Set entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["npm", "start"]
+```
+
+### Advanced Entrypoint Patterns
+
+#### 1. Configuration File Generation
+```bash
+# Generate configuration file based on environment
+generate_config() {
+  cat > /app/config.json << EOF
+{
+  "environment": "$ENVIRONMENT",
+  "database": {
+    "url": "$DATABASE_URL",
+    "poolSize": ${DB_POOL_SIZE:-10}
+  },
+  "logging": {
+    "level": "$LOG_LEVEL",
+    "file": "/app/logs/app.log"
+  },
+  "cache": {
+    "ttl": $CACHE_TTL
+  }
+}
+EOF
+  echo "✓ Configuration file generated"
+}
+```
+
+#### 2. Health Check Integration
+```bash
+# Setup health check
+setup_health_check() {
+  cat > /app/healthcheck.sh << 'EOF'
+#!/bin/bash
+curl -f http://localhost:3000/health || exit 1
+EOF
+  chmod +x /app/healthcheck.sh
+  echo "✓ Health check configured"
+}
+```
+
+#### 3. Database Migration
+```bash
+# Run database migrations
+run_migrations() {
+  if [ "$ENVIRONMENT" = "production" ]; then
+    echo "Running database migrations..."
+    npm run migrate:prod
+  else
+    echo "Skipping migrations in $ENVIRONMENT"
+  fi
+}
+```
+
+### Best Practices for Entrypoint Scripts
+
+1. **Error Handling**: Use `set -e` for immediate exit on error
+2. **Logging**: Provide clear, consistent logging
+3. **Validation**: Always validate required environment variables
+4. **Security**: Don't log sensitive information
+5. **Documentation**: Document all environment variables and their purposes
+
 ## 🚀 Migration Checklist
 
 When applying this approach to an existing repository:
@@ -389,14 +644,37 @@ When applying this approach to an existing repository:
 - [ ] **Document all variables** and their purposes
 - [ ] **Test deployment** in multiple environments
 - [ ] **Update team documentation** and runbooks
+- [ ] **Consider entrypoint scripts** for advanced configuration needs
 
 ## 📖 Additional Resources
 
+### Practical Implementation Examples
+- **[multi-build-poc Repository](https://github.com/TechoAbhishekCS3459/multi-build-poc)**: Complete working example with entrypoint scripts
+- **[Entrypoint Script Guide](./ENTRYPOINT_SCRIPT_GUIDE.md)**: Advanced configuration using entrypoint scripts
+
+### Community Examples
+- [Docker Multi-Stage Builds: Optimize Your Container Images](https://dev.to/hello_monir/docker-multi-stage-builds-optimize-your-container-images-2o8m)
+- [Multi Stage Docker Builds](https://nabeelvalley.co.za/docs/containers-and-microservices/docker-multi-stage/)
+- [Docker build for Python](https://medium.com/@kosala.atapattu/docker-build-for-python-abd7f91d4896)
+
+### Official Documentation
 - [Docker Build Arguments Documentation](https://docs.docker.com/engine/reference/builder/#arg)
 - [Next.js Environment Variables](https://nextjs.org/docs/basic-features/environment-variables)
 - [React Environment Variables](https://create-react-app.dev/docs/adding-custom-environment-variables/)
 - [Vue Environment Variables](https://vitejs.dev/guide/env-and-mode.html)
 
+## 🎉 Success Stories
+
+If you've successfully implemented this approach in your project, consider:
+- **Sharing your experience** in the [multi-build-poc repository](https://github.com/TechoAbhishekCS3459/multi-build-poc) discussions
+- **Contributing examples** to help the community
+- **Documenting your specific use case** for others to learn from
+
 ---
 
-**Remember**: The goal is to minimize build-time variables to only those absolutely necessary, allowing maximum flexibility for runtime configuration across different environments.
+**Remember**: The goal is to minimize build-time variables to only those absolutely necessary, allowing maximum flexibility for runtime configuration across different environments. Entrypoint scripts provide the ultimate flexibility for complex deployment scenarios.
+
+---
+
+*This guide is part of a comprehensive Docker optimization strategy. For advanced configurations and real-world examples, check out the practical implementations linked above.*
+EOF
